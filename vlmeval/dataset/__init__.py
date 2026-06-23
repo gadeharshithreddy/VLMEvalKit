@@ -161,8 +161,8 @@ from .wildvision import WildVision
 from .worldsense import WorldSense
 from .worldvqa import WorldVQA
 from .xstest import XSTestDataset
-from vqav2 import VQAv2Dataset
-
+from .vqav2 import VQAv2Dataset
+from .vqav2subset import VQAv2DatasetSubset
 from .video_dataset_config import supported_video_datasets  # isort: skip
 
 
@@ -302,7 +302,7 @@ IMAGE_DATASET = [
     Design2Code, VLADBench, SSIBenchDataset, NPMM, SGI_Bench_Experimental_Reasoning, MMOral_OPG_OPEN, MMOral_OPG_CLOSED,  # noqa: E501
     SciDocBench, OmniMat,
     MMRarebenchDiagnosis, MMRarebenchTreatment, MMRarebenchCrossmodal, MMRarebenchExamination,
-    VQAv2Dataset,
+    VQAv2Dataset, VQAv2DatasetSubset,
 ]
 
 # add by EASI team

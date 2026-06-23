@@ -1,12 +1,12 @@
-from image_vqa import ImageVQADataset
+from .image_vqa import ImageVQADataset
 
 class VQAv2Dataset(ImageVQADataset):
     DATASET_URL = {
-        'VQAv2Dataset': ''
+        'VQAv2Dataset': 'https://huggingface.co/datasets/GadeHarshithReddy/VQAv2Val2014/resolve/main/vqav2_val.tsv'
     }
 
     DATASET_MD5 = {
-        'VQAv2Dataset': ''
+        'VQAv2Dataset': 'CEFDF3014C0321ABC0B134C27275D0EA'
     }
 
     # Could work to have --data VQAv2 instead of --data VQAv2Dataset // Further experimentation needed
