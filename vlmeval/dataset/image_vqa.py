@@ -24,7 +24,8 @@ from .image_base import ImageBaseDataset
 from .utils import DEBUG_MESSAGE, build_judge
 from .utils.vqa_eval import istype
 
-
+# Backward compatibility: Supports both 'answer' and the legacy 'answers' column name 
+# from earlier data generation runs.
 class ImageVQADataset(ImageBaseDataset):
     TYPE = 'VQA'
 
