@@ -29,24 +29,15 @@ class ImageVQADataset(ImageBaseDataset):
     TYPE = 'VQA'
 
     DATASET_URL = {
-        'OCRVQA_TEST':
-        'https://opencompass.openxlab.space/utils/VLMEval/OCRVQA_TEST.tsv',
-        'OCRVQA_TESTCORE':
-        'https://opencompass.openxlab.space/utils/VLMEval/OCRVQA_TESTCORE.tsv',
-        'TextVQA_VAL':
-        'https://opencompass.openxlab.space/utils/VLMEval/TextVQA_VAL.tsv',
-        'DocVQA_VAL':
-        'https://opencompass.openxlab.space/utils/VLMEval/DocVQA_VAL.tsv',
-        'DocVQA_TEST':
-        'https://opencompass.openxlab.space/utils/VLMEval/DocVQA_TEST.tsv',
-        'InfoVQA_VAL':
-        'https://opencompass.openxlab.space/utils/VLMEval/InfoVQA_VAL.tsv',
-        'InfoVQA_TEST':
-        'https://opencompass.openxlab.space/utils/VLMEval/InfoVQA_TEST.tsv',
-        'ChartQA_TEST':
-        'https://opencompass.openxlab.space/utils/VLMEval/ChartQA_TEST.tsv',
-        'GQA_TestDev_Balanced':
-        'https://opencompass.openxlab.space/utils/VLMEval/GQA_TestDev_Balanced.tsv',
+        'OCRVQA_TEST': 'https://opencompass.openxlab.space/utils/VLMEval/OCRVQA_TEST.tsv',
+        'OCRVQA_TESTCORE': 'https://opencompass.openxlab.space/utils/VLMEval/OCRVQA_TESTCORE.tsv',
+        'TextVQA_VAL': 'https://opencompass.openxlab.space/utils/VLMEval/TextVQA_VAL.tsv',
+        'DocVQA_VAL': 'https://opencompass.openxlab.space/utils/VLMEval/DocVQA_VAL.tsv',
+        'DocVQA_TEST': 'https://opencompass.openxlab.space/utils/VLMEval/DocVQA_TEST.tsv',
+        'InfoVQA_VAL': 'https://opencompass.openxlab.space/utils/VLMEval/InfoVQA_VAL.tsv',
+        'InfoVQA_TEST': 'https://opencompass.openxlab.space/utils/VLMEval/InfoVQA_TEST.tsv',
+        'ChartQA_TEST': 'https://opencompass.openxlab.space/utils/VLMEval/ChartQA_TEST.tsv',
+        'GQA_TestDev_Balanced': 'https://opencompass.openxlab.space/utils/VLMEval/GQA_TestDev_Balanced.tsv',
     }
 
     DATASET_MD5 = {
@@ -64,8 +55,7 @@ class ImageVQADataset(ImageBaseDataset):
     def build_prompt(self, line):
         msgs = super().build_prompt(line)
         assert msgs[-1]['type'] == 'text'
-        msgs[-1][
-            'value'] += '\nAnswer the question using a single word or phrase.'
+        msgs[-1]['value'] += '\nAnswer the question using a single word or phrase.'
         return msgs
 
     def evaluate(self, eval_file, **judge_kwargs):
@@ -80,9 +70,19 @@ class ImageVQADataset(ImageBaseDataset):
 
         data = load(eval_file)
         dataset = self.dataset_name
-        assert 'answer' in data and 'prediction' in data
+        
+        # Check for either 'answers' or 'answer'
+        assert ('answer' in data or 'answers' in data) and 'prediction' in data
+        ans_col = 'answers' if 'answers' in data else 'answer'
+
         data['prediction'] = [str(x) for x in data['prediction']]
-        data['answer'] = [str(x) for x in data['answer']]
+        data[ans_col] = [str(x) for x in data[ans_col]]
+        
+        # Internal processing functions like process_line expect the column to be exactly 'answer'
+        # Let's align the column temporarily so the workers don't crash
+        if ans_col != 'answer':
+            data['answer'] = data[ans_col]
+
         lt = len(data)
         pool = mp.Pool(16)
         lines = [data.iloc[i] for i in range(lt)]
@@ -111,7 +111,6 @@ class ImageVQADataset(ImageBaseDataset):
             splits = set(data['split'])
             for sp in splits:
                 sub = [r for line, r in zip(lines, res) if line['split'] == sp]
-                # [np.mean(x['match']) >= full_score_weight for x in sub]
                 hit = hit_calculate(sub, dataset)
                 ret[sp] = np.mean(hit) * 100
             sub = [r for line, r in zip(lines, res)]
@@ -124,7 +123,6 @@ class ImageVQADataset(ImageBaseDataset):
                 cates.sort()
                 for c in cates:
                     sub = [r for line, r in zip(lines, res) if line['category'] == c]
-                    # [np.mean(x['match']) >= full_score_weight for x in sub]
                     hit = hit_calculate(sub, dataset)
                     ret[c] = np.mean(hit) * 100
         ret = d2df(ret)
@@ -136,9 +134,14 @@ class ImageVQADataset(ImageBaseDataset):
 
     def evaluate_verifier(self, eval_file, **judge_kwargs):
         data = load(eval_file)
-        assert 'answer' in data and 'prediction' in data
+        
+        # Check for either 'answers' or 'answer'
+        assert ('answer' in data or 'answers' in data) and 'prediction' in data
+        ans_col = 'answers' if 'answers' in data else 'answer'
+
         data['prediction'] = [str(x) for x in data['prediction']]
-        data['answer'] = [str(x) for x in data['answer']]
+        data[ans_col] = [str(x) for x in data[ans_col]]
+        
         lt = len(data)
         lines = [data.iloc[i] for i in range(lt)]
         from .utils.verifier import Verifier
@@ -146,10 +149,10 @@ class ImageVQADataset(ImageBaseDataset):
         res = []
         scores = []
         for line in tqdm(lines):
-            score = verifier.evaluate(line['question'], line['prediction'], line['answer'])
+            score = verifier.evaluate(line['question'], line['prediction'], line[ans_col])
             scores.append(score)
             res.append({
-                'gt': [line['answer']],
+                'gt': [line[ans_col]],
                 'pred': line['prediction'],
                 'match': [1.0 if score else 0.0]
             })
@@ -169,7 +172,6 @@ class ImageVQADataset(ImageBaseDataset):
             splits = set(data['split'])
             for sp in splits:
                 sub = [r for line, r in zip(lines, res) if line['split'] == sp]
-                # [np.mean(x['match']) >= full_score_weight for x in sub]
                 hit = hit_calculate(sub)
                 ret[sp] = np.mean(hit) * 100
             sub = [r for line, r in zip(lines, res)]
@@ -200,7 +202,6 @@ class ImageVQADataset(ImageBaseDataset):
             return {'Overall Acc': metrics['split=none|Overall']}
         else:
             return super().report_primary_metric(metrics)
-
 
 class VizWiz(ImageBaseDataset):
     TYPE = 'VQA'
