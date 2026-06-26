@@ -2,7 +2,7 @@ from .image_vqa import ImageVQADataset
 
 class VQAv2Dataset(ImageVQADataset):
     DATASET_URL = {
-        'VQAv2Dataset': 'https://huggingface.co/datasets/GadeHarshithReddy/VQAv2Val2014/resolve/main/vqav2_val.tsv'
+        'VQAv2Dataset': 'https://huggingface.co/datasets/GadeHarshithReddy/VQAv2Val2014/resolve/main/VQAv2Dataset.tsv'
     }
 
     DATASET_MD5 = {

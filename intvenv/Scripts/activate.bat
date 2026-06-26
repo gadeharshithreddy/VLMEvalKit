@@ -8,7 +8,7 @@ if defined _OLD_CODEPAGE (
     "%SystemRoot%\System32\chcp.com" 65001 > nul
 )
 
-set VIRTUAL_ENV=C:\Users\hg0591\OneDrive - UNT System\TAMS ESR Projects\VLMEvalKit\intvenv
+set VIRTUAL_ENV=C:\Users\hg0591\TAMS ESR Projects\VLMEvalKit\intvenv
 
 if not defined PROMPT set PROMPT=$P$G
 

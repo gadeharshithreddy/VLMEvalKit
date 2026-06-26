@@ -38,7 +38,7 @@ deactivate () {
 # unset irrelevant variables
 deactivate nondestructive
 
-VIRTUAL_ENV="C:\Users\hg0591\OneDrive - UNT System\TAMS ESR Projects\VLMEvalKit\intvenv"
+VIRTUAL_ENV="C:\Users\hg0591\TAMS ESR Projects\VLMEvalKit\intvenv"
 export VIRTUAL_ENV
 
 _OLD_VIRTUAL_PATH="$PATH"

@@ -108,8 +108,9 @@ class InternVLChat(BaseModel):
                  # R1 parameters
                  cot_prompt_version='v1',
                  #
-                 use_lmdeploy=False,
+                 use_lmdeploy=True,
                  use_postprocess=False,
+                 trust_remote_code=True,
                  **kwargs):
 
         assert best_of_n >= 1
@@ -171,20 +172,33 @@ class InternVLChat(BaseModel):
                 vision_config=vision_config,
                 backend_config=engine_type(
                     session_len=max(16384, kwargs.get("max_new_tokens", 16384)),
-                    cache_max_entry_count=0.5,
+                    cache_max_entry_count=0.1,
                     tp=num_gpus,
-                )
+                ),
+                trust_remote_code=True
             )
             torch.cuda.set_device(0)
             self.device = 'cuda'
         else:
+
+            # Clean, direct initialization using native Hugging Face loading flags
             self.model = AutoModel.from_pretrained(
                 model_path,
                 torch_dtype=torch.bfloat16,
                 trust_remote_code=True,
                 low_cpu_mem_usage=True,
-                device_map="auto").eval()
+                load_in_4bit=True,          # Let Hugging Face handle the bitsandbytes hook natively
+                device_map="auto"
+            ).eval()
+            
             self.device = 'cuda'
+            # self.model = AutoModel.from_pretrained(
+            #     model_path,
+            #     torch_dtype=torch.bfloat16,
+            #     trust_remote_code=True,
+            #     low_cpu_mem_usage=True,
+            #     device_map="auto").eval()
+            # self.device = 'cuda'
 
         if best_of_n > 1:
             assert version == 'V2.0', 'only support BoN evaluation with version==V2.0'

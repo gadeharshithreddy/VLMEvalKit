@@ -1,4 +1,4 @@
-#!C:\Users\hg0591\OneDrive - UNT System\TAMS ESR Projects\VLMEvalKit\intvenv\Scripts\python.exe
+#!C:\Users\hg0591\TAMS ESR Projects\VLMEvalKit\intvenv\Scripts\python.exe
 
 ##############################################################################
 #

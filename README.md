@@ -158,3 +158,7 @@ If you use VLMEvalKit in your research or wish to refer to published OpenSource 
 [github-license-shield]: https://img.shields.io/github/license/open-compass/VLMEvalKit?color=white&labelColor=black&style=flat-square
 [github-stars-link]: https://github.com/open-compass/VLMEvalKit/stargazers
 [github-stars-shield]: https://img.shields.io/github/stars/open-compass/VLMEvalKit?color=ffcb47&labelColor=black&style=flat-square
+
+
+Extra Editations Notes:
+Note on Data Schema: Early versions of the dataset generated the target column as answers. The evaluation script dynamically maps answers to answer to ensure backward compatibility with all cached evaluation files.
