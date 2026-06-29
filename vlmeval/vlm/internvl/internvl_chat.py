@@ -108,9 +108,10 @@ class InternVLChat(BaseModel):
                  # R1 parameters
                  cot_prompt_version='v1',
                  #
-                 use_lmdeploy=True,
+                 use_lmdeploy=False,
                  use_postprocess=False,
                  trust_remote_code=True,
+                 use_flash_attn=True,
                  **kwargs):
 
         assert best_of_n >= 1
@@ -187,6 +188,7 @@ class InternVLChat(BaseModel):
                 torch_dtype=torch.bfloat16,
                 trust_remote_code=True,
                 low_cpu_mem_usage=True,
+                use_flash_attn=True,
                 load_in_4bit=True,          # Let Hugging Face handle the bitsandbytes hook natively
                 device_map="auto"
             ).eval()

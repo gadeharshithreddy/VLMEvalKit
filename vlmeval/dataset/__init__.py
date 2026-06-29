@@ -163,6 +163,7 @@ from .worldvqa import WorldVQA
 from .xstest import XSTestDataset
 from .vqav2 import VQAv2Dataset
 from .vqav2subset import VQAv2DatasetSubset
+from .vqacl import VQACL
 from .video_dataset_config import supported_video_datasets  # isort: skip
 
 
@@ -302,7 +303,6 @@ IMAGE_DATASET = [
     Design2Code, VLADBench, SSIBenchDataset, NPMM, SGI_Bench_Experimental_Reasoning, MMOral_OPG_OPEN, MMOral_OPG_CLOSED,  # noqa: E501
     SciDocBench, OmniMat,
     MMRarebenchDiagnosis, MMRarebenchTreatment, MMRarebenchCrossmodal, MMRarebenchExamination,
-    VQAv2Dataset, VQAv2DatasetSubset,
 ]
 
 # add by EASI team
@@ -311,6 +311,8 @@ IMAGE_DATASET += [
     SparBench, SpatialVizBench, StareBench, OmniSpatialBench, ERQABench, RoboSpatialBench, RefSpatialBench,  # noqa: E501
     SPBench, ERIQBench, DA2K
 ]
+# Custom datasets added
+IMAGE_DATASET += [VQAv2Dataset, VQAv2DatasetSubset, VQACL]
 
 VIDEO_DATASET = [
     MMBenchVideo, VideoMME, MVBench, MVBench_MP4, MVTamperBench,
