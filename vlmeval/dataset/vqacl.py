@@ -6,7 +6,7 @@ class VQACL(ImageVQADataset):
     }
 
     DATASET_MD5 = {
-        'VQACL': 'CBE6A927F5ACAE5C6FBD8559A81964A4'
+        'VQACL': '7593A589336D02EE2C89E0BE80ECFA5E'
     }
 
     # Could work to have --data VQACL instead of --data VQACL // Further experimentation needed
