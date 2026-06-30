@@ -164,6 +164,9 @@ from .xstest import XSTestDataset
 from .vqav2 import VQAv2Dataset
 from .vqav2subset import VQAv2DatasetSubset
 from .vqacl import VQACL
+from .cvqa5000 import CVQA5000
+from .cocogqa import COCOGQA
+from .vqacp5000 import VQACP5000
 from .video_dataset_config import supported_video_datasets  # isort: skip
 
 
@@ -312,7 +315,7 @@ IMAGE_DATASET += [
     SPBench, ERIQBench, DA2K
 ]
 # Custom datasets added
-IMAGE_DATASET += [VQAv2Dataset, VQAv2DatasetSubset, VQACL]
+IMAGE_DATASET += [VQAv2Dataset, VQAv2DatasetSubset, VQACL, CVQA5000, COCOGQA, VQACP5000]
 
 VIDEO_DATASET = [
     MMBenchVideo, VideoMME, MVBench, MVBench_MP4, MVTamperBench,
