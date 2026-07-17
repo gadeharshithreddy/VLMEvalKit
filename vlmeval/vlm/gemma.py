@@ -100,7 +100,7 @@ class Gemma3(BaseModel):
             # export VLLM_WORKER_MULTIPROC_METHOD=spawn
         else:
             self.model = Gemma3ForConditionalGeneration.from_pretrained(
-                model_path, device_map="cuda", attn_implementation="flash_attention_2", torch_dtype=torch.bfloat16
+                model_path, device_map="cuda", attn_implementation="flash_attention_2", torch_dtype=torch.bfloat16, load_in_4bit=True,
             ).eval()
             self.device = self.model.device
 
@@ -293,20 +293,52 @@ class Gemma4(BaseModel):
             # export VLLM_WORKER_MULTIPROC_METHOD=spawn
             self.device = 'cuda'
         else:
+            from transformers import BitsAndBytesConfig
+
+            # 1. Define the quantization configuration
+            quant_config = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_compute_dtype=kwargs.get('torch_dtype', torch.bfloat16)
+            )
+
+            # 2. Build the model kwargs using the new config object
             model_kwargs = {
                 'device_map': kwargs.pop('device_map', 'cuda'),
                 'torch_dtype': kwargs.pop('torch_dtype', torch.bfloat16),
                 'trust_remote_code': trust_remote_code,
+                'quantization_config': quant_config, # <-- The new standard!
             }
-            if attn_implementation := kwargs.pop('attn_implementation', None):
+            
+            # 3. Handle Flash Attention Fallback
+            attn_implementation = kwargs.pop('attn_implementation', 'sdpa')
+            if attn_implementation:
                 model_kwargs['attn_implementation'] = attn_implementation
 
+            # 4. Load the Model
             self.model = Gemma4ForConditionalGeneration.from_pretrained(
                 model_path, **model_kwargs
             ).eval()
+            
+            # 5. Assign Device
             self.device = getattr(self.model, 'device', None)
             if self.device is None:
                 self.device = next(self.model.parameters()).device
+
+            # model_kwargs = {
+            #     'device_map': kwargs.pop('device_map', 'cuda'),
+            #     'torch_dtype': kwargs.pop('torch_dtype', torch.bfloat16),
+            #     'trust_remote_code': trust_remote_code,
+            #     'load_in_4bit': True,
+            # }
+            # if attn_implementation := kwargs.pop('attn_implementation', 'flash_attention_2'):
+            #     model_kwargs['attn_implementation'] = attn_implementation
+
+            # self.model = Gemma4ForConditionalGeneration.from_pretrained(
+            #     model_path, **model_kwargs
+            # ).eval()
+            # self.device = getattr(self.model, 'device', None)
+            # if self.device is None:
+            #     self.device = next(self.model.parameters()).device
 
         self.processor = AutoProcessor.from_pretrained(
             model_path, trust_remote_code=trust_remote_code

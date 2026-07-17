@@ -1007,7 +1007,10 @@ def run_local_mode(args):
                         elif link_addr.exists() or link_addr.is_symlink():
                             link_addr.unlink()
                         rel_target = file_addr.relative_to(pred_root_meta)
-                        link_addr.symlink_to(rel_target)
+                        try:
+                            link_addr.symlink_to(rel_target)
+                        except OSError:
+                            pass
 
             except Exception as e:
                 logger.exception(f'Model {model_name} x Dataset {dataset_name} combination failed: {e}, '

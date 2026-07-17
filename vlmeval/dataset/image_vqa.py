@@ -24,6 +24,8 @@ from .image_base import ImageBaseDataset
 from .utils import DEBUG_MESSAGE, build_judge
 from .utils.vqa_eval import istype
 
+import ast
+
 # Backward compatibility: Supports both 'answer' and the legacy 'answers' column name 
 # from earlier data generation runs.
 class ImageVQADataset(ImageBaseDataset):
@@ -60,6 +62,17 @@ class ImageVQADataset(ImageBaseDataset):
         return msgs
 
     def evaluate(self, eval_file, **judge_kwargs):
+        # if judge_kwargs.get('use_verifier', False):
+        #     return self.evaluate_verifier(eval_file, **judge_kwargs)
+        # else:
+        #     return self.evaluate_heuristic(eval_file, **judge_kwargs)
+        judge_model_name = judge_kwargs.get('model', None)
+        
+        # If a custom LLM judge is explicitly passed, hijack the pipeline and use it
+        if judge_model_name is not None and judge_model_name != 'exact_matching':
+            return self.evaluate_llm_judge(eval_file, **judge_kwargs)
+            
+        # Default behavior fallback (keeps standard heuristic/verifier pipelines intact)
         if judge_kwargs.get('use_verifier', False):
             return self.evaluate_verifier(eval_file, **judge_kwargs)
         else:
@@ -76,7 +89,17 @@ class ImageVQADataset(ImageBaseDataset):
         assert ('answer' in data or 'answers' in data) and 'prediction' in data
         ans_col = 'answers' if 'answers' in data else 'answer'
 
-        data['prediction'] = [str(x) for x in data['prediction']]
+        def extract_content(pred):
+            if isinstance(pred, str) and pred.strip().startswith("{"):
+                try:
+                    parsed = ast.literal_eval(pred)
+                    if isinstance(parsed, dict) and 'content' in parsed:
+                        return parsed['content']
+                except (ValueError, SyntaxError):
+                    pass # Fallback if parsing fails
+            return pred # Return as-is if it's already a normal string
+
+        data['prediction'] = [extract_content(x) for x in data['prediction']]
         data[ans_col] = [str(x) for x in data[ans_col]]
         
         # Internal processing functions like process_line expect the column to be exactly 'answer'
@@ -87,7 +110,7 @@ class ImageVQADataset(ImageBaseDataset):
         lt = len(data)
         pool = mp.Pool(16)
         lines = [data.iloc[i] for i in range(lt)]
-        if listinstr(['TextVQA'], dataset):
+        if listinstr(['TextVQA', 'VQACP5000'], dataset):
             res = pool.map(partial(process_line, method='vqa_score'), lines)
         elif listinstr(['ChartQA'], dataset):
             res = pool.map(partial(process_line, method='relaxed_accuracy'), lines)
@@ -98,10 +121,30 @@ class ImageVQADataset(ImageBaseDataset):
         else:  # default using vqa_score to calculate score
             res = pool.map(process_line, lines)
 
+        # data['eval_gt'] = [r['gt'] for r in res]
+        # data['eval_pred'] = [r['pred'] for r in res]
+        # data['eval_match'] = [r['match'] for r in res]
+        # data['eval_score'] = [np.mean(r['match']) for r in res]
+
+        # --- FIXED CODE CODE ---
         data['eval_gt'] = [r['gt'] for r in res]
         data['eval_pred'] = [r['pred'] for r in res]
-        data['eval_match'] = [r['match'] for r in res]
-        data['eval_score'] = [np.mean(r['match']) for r in res]
+
+        # Override the match calculation if it was broken by list-vs-string types
+        fixed_matches = []
+        for r in res:
+            gt_list = r['gt'] if isinstance(r['gt'], list) else [r['gt']]
+            pred_str = r['pred']
+            
+            # If the clean string is inside the acceptable ground truth list, override to a hit [1.0]
+            # if pred_str in gt_list:
+            #     fixed_matches.append([1.0])
+            # else:
+            #     
+            fixed_matches.append(r['match'])
+
+        data['eval_match'] = fixed_matches
+        data['eval_score'] = [np.mean(m) for m in fixed_matches]
 
         detailed_result_file = get_intermediate_file_path(eval_file, '_results')
         dump(data, detailed_result_file)
@@ -140,7 +183,17 @@ class ImageVQADataset(ImageBaseDataset):
         assert ('answer' in data or 'answers' in data) and 'prediction' in data
         ans_col = 'answers' if 'answers' in data else 'answer'
 
-        data['prediction'] = [str(x) for x in data['prediction']]
+        def extract_content(pred):
+            if isinstance(pred, str) and pred.strip().startswith("{"):
+                try:
+                    parsed = ast.literal_eval(pred)
+                    if isinstance(parsed, dict) and 'content' in parsed:
+                        return parsed['content']
+                except (ValueError, SyntaxError):
+                    pass
+            return pred
+
+        data['prediction'] = [extract_content(x) for x in data['prediction']]
         data[ans_col] = [str(x) for x in data[ans_col]]
         
         lt = len(data)
@@ -193,7 +246,100 @@ class ImageVQADataset(ImageBaseDataset):
         result_file = get_intermediate_file_path(eval_file, '_acc')
         dump(ret, result_file)
         return ret
+    
+    def evaluate_llm_judge(self, eval_file, **judge_kwargs):
+        import requests
+        import json
+        from tqdm import tqdm
+        
+        # Pull the base URL directly from your config variables or hardcode your local port
+        api_url = "http://localhost:8080/v1/chat/completions"
 
+        data = load(eval_file)
+        assert ('answer' in data or 'answers' in data) and 'prediction' in data
+        ans_col = 'answers' if 'answers' in data else 'answer'
+        
+        def extract_content(pred):
+            if isinstance(pred, str) and pred.strip().startswith("{"):
+                try:
+                    import ast
+                    parsed = ast.literal_eval(pred)
+                    if isinstance(parsed, dict) and 'content' in parsed:
+                        return parsed['content']
+                except (ValueError, SyntaxError):
+                    pass
+            return pred
+
+        data['prediction'] = [extract_content(x) for x in data['prediction']]
+        data[ans_col] = [str(x) for x in data[ans_col]]
+
+        lt = len(data)
+        lines = [data.iloc[i] for i in range(lt)]
+        
+        judgments = []
+        print("Routing evaluation straight to local LMDeploy GPU Server...")
+        
+        for line in tqdm(lines):
+            question = line.get('question', '')
+            gt_answer = line[ans_col]
+            pred_answer = line['prediction']
+            
+            prompt = (
+                f"Question: {question}\n"
+                f"Ground Truth Correct Answer: {gt_answer}\n"
+                f"Model Generated Output: {pred_answer}\n\n"
+                f"Task: Review if the Model Generated Output means generally the same answer as the Ground Truth. "
+                f"Respond strictly with only a single word: 'Yes' or 'No'."
+            )
+            
+            # Format a clean, standard OpenAI/LMDeploy schema payload natively
+            payload = {
+                "model": "Qwen/Qwen2.5-7B-Instruct",
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.0,
+                "max_tokens": 5
+            }
+            headers = {"Content-Type": "application/json"}
+            
+            try:
+                # Direct post call to your local machine on port 8080
+                response = requests.post(api_url, headers=headers, json=payload, timeout=30)
+                resp_json = response.json()
+                
+                # Modern chat/completions schema extraction
+                response_text = resp_json['choices'][0]['message']['content'].strip()
+                score = 1.0 if 'yes' in response_text.lower() else 0.0
+            except Exception as e:
+                # If a single row encounters an anomaly, catch it safely without crashing the evaluation loop
+                score = 0.0
+                
+            judgments.append(score)
+
+        # Structure matches cleanly to assemble output tables
+        res = [{'gt': [l[ans_col]], 'pred': l['prediction'], 'match': [j]} for l, j in zip(lines, judgments)]
+        
+        data['eval_match'] = [[j] for j in judgments]
+        data['eval_score'] = judgments
+        
+        detailed_result_file = get_intermediate_file_path(eval_file, '_results')
+        dump(data, detailed_result_file)
+
+        ret = dict()
+        ret['Overall'] = np.mean(judgments) * 100
+        
+        if 'category' in data:
+            cates = list(set(data['category']))
+            cates.sort()
+            for c in cates:
+                sub_j = [j for line, j in zip(lines, judgments) if line['category'] == c]
+                ret[c] = np.mean(sub_j) * 100
+                
+        ret = d2df(ret)
+        ret.round(2)
+
+        result_file = get_intermediate_file_path(eval_file, '_acc')
+        dump(ret, result_file)
+        return ret
     @classmethod
     def report_primary_metric(cls, metrics: dict | None) -> dict:
         if not isinstance(metrics, dict) or not metrics:

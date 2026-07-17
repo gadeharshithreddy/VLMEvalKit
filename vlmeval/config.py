@@ -2615,7 +2615,19 @@ interns1_series = {}
 for group in interns1_groups:
     interns1_series.update(group)
     
-supported_VLM = {}
+supported_VLM = {
+    "Qwen2.5-7B-Instruct": partial(
+        api.OpenAIWrapper,
+        model="Qwen/Qwen2.5-7B-Instruct", 
+        api_base="http://localhost:8080/v1/chat/completions", # Clean base URL (Do NOT add /chat/completions)
+        key="dummy_key", 
+        temperature=0,
+        img_size=-1,
+        img_detail="high",
+        retry=10,
+        verbose=False,
+    )
+}
 
 model_groups = [
     ungrouped, o1_apis, api_models, xtuner_series, qwen_series, llava_series, granite_vision_series,
