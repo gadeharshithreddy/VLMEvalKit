@@ -62,21 +62,23 @@ class ImageVQADataset(ImageBaseDataset):
         return msgs
 
     def evaluate(self, eval_file, **judge_kwargs):
-        # if judge_kwargs.get('use_verifier', False):
-        #     return self.evaluate_verifier(eval_file, **judge_kwargs)
-        # else:
-        #     return self.evaluate_heuristic(eval_file, **judge_kwargs)
-        judge_model_name = judge_kwargs.get('model', None)
-        
-        # If a custom LLM judge is explicitly passed, hijack the pipeline and use it
-        if judge_model_name is not None and judge_model_name != 'exact_matching':
-            return self.evaluate_llm_judge(eval_file, **judge_kwargs)
-            
-        # Default behavior fallback (keeps standard heuristic/verifier pipelines intact)
         if judge_kwargs.get('use_verifier', False):
             return self.evaluate_verifier(eval_file, **judge_kwargs)
         else:
             return self.evaluate_heuristic(eval_file, **judge_kwargs)
+        
+        
+        # judge_model_name = judge_kwargs.get('model', None)
+        
+        # # If a custom LLM judge is explicitly passed, hijack the pipeline and use it
+        # if judge_model_name is not None and judge_model_name != 'exact_matching':
+        #     return self.evaluate_llm_judge(eval_file, **judge_kwargs)
+            
+        # # Default behavior fallback (keeps standard heuristic/verifier pipelines intact)
+        # if judge_kwargs.get('use_verifier', False):
+        #     return self.evaluate_verifier(eval_file, **judge_kwargs)
+        # else:
+        #     return self.evaluate_heuristic(eval_file, **judge_kwargs)
 
     # It returns a DataFrame
     def evaluate_heuristic(self, eval_file, **judge_kwargs):
@@ -100,7 +102,21 @@ class ImageVQADataset(ImageBaseDataset):
             return pred # Return as-is if it's already a normal string
 
         data['prediction'] = [extract_content(x) for x in data['prediction']]
-        data[ans_col] = [str(x) for x in data[ans_col]]
+        
+        # Ensure it stays a string for internal eval() calls inside process_line, 
+        # but clean up any serialized list quirks safely.
+        def safe_stringify_gt(x):
+            if isinstance(x, str):
+                x_clean = x.strip()
+                # If it's already a clean list string or single-quoted item, keep it
+                if x_clean.startswith('[') and x_clean.endswith(']'):
+                    return x_clean
+                return f"['{x_clean}']" if not (x_clean.startswith("'") or x_clean.startswith('"')) else x_clean
+            elif isinstance(x, (list, tuple, set)):
+                return str([str(i).strip() for i in x])
+            return str(x)
+
+        data[ans_col] = [safe_stringify_gt(x) for x in data[ans_col]]
         
         # Internal processing functions like process_line expect the column to be exactly 'answer'
         # Let's align the column temporarily so the workers don't crash
@@ -110,7 +126,7 @@ class ImageVQADataset(ImageBaseDataset):
         lt = len(data)
         pool = mp.Pool(16)
         lines = [data.iloc[i] for i in range(lt)]
-        if listinstr(['TextVQA', 'VQACP5000'], dataset):
+        if listinstr(['TextVQA'], dataset):
             res = pool.map(partial(process_line, method='vqa_score'), lines)
         elif listinstr(['ChartQA'], dataset):
             res = pool.map(partial(process_line, method='relaxed_accuracy'), lines)
@@ -130,20 +146,29 @@ class ImageVQADataset(ImageBaseDataset):
         data['eval_gt'] = [r['gt'] for r in res]
         data['eval_pred'] = [r['pred'] for r in res]
 
-        # Override the match calculation if it was broken by list-vs-string types
         fixed_matches = []
         for r in res:
-            gt_list = r['gt'] if isinstance(r['gt'], list) else [r['gt']]
-            pred_str = r['pred']
+            # Normalize the Ground Truth strings
+            if isinstance(r['gt'], list):
+                gt_list = [str(g).strip().lower() for g in r['gt']]
+            else:
+                gt_list = [str(r['gt']).strip().lower()]
             
-            # If the clean string is inside the acceptable ground truth list, override to a hit [1.0]
-            # if pred_str in gt_list:
-            #     fixed_matches.append([1.0])
-            # else:
-            #     
-            fixed_matches.append(r['match'])
+            # Normalize Prediction string
+            pred_str = str(r['pred']).strip().lower()
+            
+            # Exact match override or keyword containment check
+            # (e.g., if pred_str is 'yes' and gt contains 'yes')
+            if pred_str in gt_list or any(g in pred_str for g in gt_list):
+                fixed_matches.append([1.0])
+            else:
+                fixed_matches.append(r['match'])
 
         data['eval_match'] = fixed_matches
+        # Make sure r['match'] is updated for downstream hit_calculate(res, dataset)
+        for original_res, updated_match in zip(res, fixed_matches):
+            original_res['match'] = updated_match
+
         data['eval_score'] = [np.mean(m) for m in fixed_matches]
 
         detailed_result_file = get_intermediate_file_path(eval_file, '_results')
