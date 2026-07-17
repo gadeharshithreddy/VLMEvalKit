@@ -62,23 +62,23 @@ class ImageVQADataset(ImageBaseDataset):
         return msgs
 
     def evaluate(self, eval_file, **judge_kwargs):
-        if judge_kwargs.get('use_verifier', False):
-            return self.evaluate_verifier(eval_file, **judge_kwargs)
-        else:
-            return self.evaluate_heuristic(eval_file, **judge_kwargs)
-        
-        
-        # judge_model_name = judge_kwargs.get('model', None)
-        
-        # # If a custom LLM judge is explicitly passed, hijack the pipeline and use it
-        # if judge_model_name is not None and judge_model_name != 'exact_matching':
-        #     return self.evaluate_llm_judge(eval_file, **judge_kwargs)
-            
-        # # Default behavior fallback (keeps standard heuristic/verifier pipelines intact)
         # if judge_kwargs.get('use_verifier', False):
         #     return self.evaluate_verifier(eval_file, **judge_kwargs)
         # else:
         #     return self.evaluate_heuristic(eval_file, **judge_kwargs)
+        
+        
+        judge_model_name = judge_kwargs.get('model', None)
+        
+        # If a custom LLM judge is explicitly passed, hijack the pipeline and use it
+        if judge_model_name is not None and judge_model_name != 'exact_matching':
+            return self.evaluate_llm_judge(eval_file, **judge_kwargs)
+            
+        # Default behavior fallback (keeps standard heuristic/verifier pipelines intact)
+        if judge_kwargs.get('use_verifier', False):
+            return self.evaluate_verifier(eval_file, **judge_kwargs)
+        else:
+            return self.evaluate_heuristic(eval_file, **judge_kwargs)
 
     # It returns a DataFrame
     def evaluate_heuristic(self, eval_file, **judge_kwargs):
