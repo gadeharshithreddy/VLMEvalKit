@@ -102,21 +102,7 @@ class ImageVQADataset(ImageBaseDataset):
             return pred # Return as-is if it's already a normal string
 
         data['prediction'] = [extract_content(x) for x in data['prediction']]
-        
-        # Ensure it stays a string for internal eval() calls inside process_line, 
-        # but clean up any serialized list quirks safely.
-        def safe_stringify_gt(x):
-            if isinstance(x, str):
-                x_clean = x.strip()
-                # If it's already a clean list string or single-quoted item, keep it
-                if x_clean.startswith('[') and x_clean.endswith(']'):
-                    return x_clean
-                return f"['{x_clean}']" if not (x_clean.startswith("'") or x_clean.startswith('"')) else x_clean
-            elif isinstance(x, (list, tuple, set)):
-                return str([str(i).strip() for i in x])
-            return str(x)
-
-        data[ans_col] = [safe_stringify_gt(x) for x in data[ans_col]]
+        data[ans_col] = [str(x) for x in data[ans_col]]
         
         # Internal processing functions like process_line expect the column to be exactly 'answer'
         # Let's align the column temporarily so the workers don't crash
@@ -137,39 +123,10 @@ class ImageVQADataset(ImageBaseDataset):
         else:  # default using vqa_score to calculate score
             res = pool.map(process_line, lines)
 
-        # data['eval_gt'] = [r['gt'] for r in res]
-        # data['eval_pred'] = [r['pred'] for r in res]
-        # data['eval_match'] = [r['match'] for r in res]
-        # data['eval_score'] = [np.mean(r['match']) for r in res]
-
-        # --- FIXED CODE CODE ---
         data['eval_gt'] = [r['gt'] for r in res]
         data['eval_pred'] = [r['pred'] for r in res]
-
-        fixed_matches = []
-        for r in res:
-            # Normalize the Ground Truth strings
-            if isinstance(r['gt'], list):
-                gt_list = [str(g).strip().lower() for g in r['gt']]
-            else:
-                gt_list = [str(r['gt']).strip().lower()]
-            
-            # Normalize Prediction string
-            pred_str = str(r['pred']).strip().lower()
-            
-            # Exact match override or keyword containment check
-            # (e.g., if pred_str is 'yes' and gt contains 'yes')
-            if pred_str in gt_list or any(g in pred_str for g in gt_list):
-                fixed_matches.append([1.0])
-            else:
-                fixed_matches.append(r['match'])
-
-        data['eval_match'] = fixed_matches
-        # Make sure r['match'] is updated for downstream hit_calculate(res, dataset)
-        for original_res, updated_match in zip(res, fixed_matches):
-            original_res['match'] = updated_match
-
-        data['eval_score'] = [np.mean(m) for m in fixed_matches]
+        data['eval_match'] = [r['match'] for r in res]
+        data['eval_score'] = [np.mean(r['match']) for r in res]
 
         detailed_result_file = get_intermediate_file_path(eval_file, '_results')
         dump(data, detailed_result_file)
